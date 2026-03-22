@@ -146,9 +146,9 @@ nav a:hover{color:var(--accent);}
 </head>
 <body>
 
-<div class="admin-bar">
+<div class="admin-bar" id="admin-bar" style="display:none">
   <span class="admin-pill" id="admin-pill">⚡ Admin Mode</span>
-  <span style="color:var(--muted);font-size:.72rem">Double-click any category name to rename it</span>
+  <span style="color:var(--muted);font-size:.72rem" id="admin-bar-tip">Double-click any category name to rename it</span>
 </div>
 
 <header>
@@ -161,6 +161,7 @@ nav a:hover{color:var(--accent);}
     <button class="btn btn-accent create-topic-btn" onclick="openCreateTopic()">✏️ Create Topic</button>
     <button class="btn btn-ghost" id="btn-signin" onclick="openModal('loginModal')">Sign In</button>
     <button class="btn btn-primary" id="btn-join" onclick="openModal('registerModal')">Join Free</button>
+    <button class="btn btn-ghost" id="btn-user-menu" style="display:none" onclick="openModal('userMenuModal')">👤 Account</button>
   </div>
 </header>
 
@@ -930,8 +931,8 @@ function saveTiers(){
 // ══ AUTH ══
 // ══ SUPABASE ══
 // Replace these two values with your own from supabase.com → Settings → API
-var SUPABASE_URL  = 'https://brrorzzuzymkwyqnucry.supabase.co';
-var SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJycm9yenp1enlta3d5cW51Y3J5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxMzE3NTUsImV4cCI6MjA4OTcwNzc1NX0.3J4HfofpVctnucLYPJxBCQwQ0ZLrie3xWxUGIjNPbO8';
+var SUPABASE_URL  = 'YOUR_SUPABASE_URL';
+var SUPABASE_ANON = 'YOUR_SUPABASE_ANON_KEY';
 var sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // Admin username — set this to whatever account you want to be admin
@@ -965,16 +966,43 @@ sb.auth.onAuthStateChange(function(event, session){
 });
 
 function updateUI(){
+  var adminBar = document.getElementById('admin-bar');
+  var btnSignin = document.getElementById('btn-signin');
+  var btnJoin   = document.getElementById('btn-join');
+  var btnUser   = document.getElementById('btn-user-menu');
+
   if (currentUser.name !== 'Guest'){
-    document.getElementById('btn-signin').textContent = isAdmin ? '👑 Admin Panel' : currentUser.name;
-    document.getElementById('btn-signin').onclick = isAdmin ? function(){ openModal('adminModal'); } : null;
-    document.getElementById('btn-join').style.display = 'none';
-    if (isAdmin) document.getElementById('admin-pill').textContent = '👑 Admin Logged In';
+    if (isAdmin){
+      // Admin user
+      btnSignin.textContent = '👑 Admin Panel';
+      btnSignin.onclick = function(){ openModal('adminModal'); };
+      btnSignin.style.display = '';
+      btnJoin.style.display = 'none';
+      btnUser.style.display = 'none';
+      adminBar.style.display = 'flex';
+      document.getElementById('admin-pill').textContent = '👑 Admin Logged In';
+    } else {
+      // Regular logged-in user
+      btnSignin.style.display = 'none';
+      btnJoin.style.display = 'none';
+      btnUser.style.display = '';
+      adminBar.style.display = 'none';
+      // Update user menu info
+      var nm = document.getElementById('user-menu-name');
+      var tr = document.getElementById('user-menu-tier');
+      if (nm) nm.textContent = currentUser.name;
+      if (tr) tr.textContent = currentUser.tier.charAt(0).toUpperCase() + currentUser.tier.slice(1);
+    }
   } else {
-    document.getElementById('btn-signin').textContent = 'Sign In';
-    document.getElementById('btn-signin').onclick = function(){ openModal('loginModal'); };
-    document.getElementById('btn-join').style.display = '';
-    document.getElementById('admin-pill').textContent = '⚡ Admin Mode';
+    // Guest
+    btnSignin.textContent = 'Sign In';
+    btnSignin.onclick = function(){ openModal('loginModal'); };
+    btnSignin.style.display = '';
+    btnJoin.style.display = '';
+    btnUser.style.display = 'none';
+    adminBar.style.display = 'none';
+    // Turn off edit mode if active
+    if (editModeActive) toggleEditMode();
   }
   updatePaidRows();
   refreshTopicButtons();
@@ -1029,6 +1057,15 @@ function registerUser(){
       showToast('🎮 Welcome, ' + username + '! Check your email to confirm your account.');
       updateUI();
     }
+  });
+}
+
+function userLogout(){
+  sb.auth.signOut().then(function(){
+    isAdmin = false; currentUser = { name:'Guest', tier:'free' };
+    closeModal('userMenuModal');
+    updateUI();
+    showToast('Signed out.');
   });
 }
 
@@ -1092,6 +1129,7 @@ function formatCard(input){ var v=input.value.replace(/\D/g,'').substring(0,16);
 var editModeActive = false;
 
 function toggleEditMode(){
+  if (!isAdmin){ showToast("🔒 Admin only"); return; }
   editModeActive = !editModeActive;
   var bar = document.getElementById('edit-mode-bar');
   bar.classList.toggle('active', editModeActive);
@@ -1151,6 +1189,27 @@ loadTopics();
     <span style="font-size:.75rem;color:rgba(255,255,255,.7)">Click any highlighted text to edit it directly</span>
   </div>
   <button class="btn" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);font-size:.78rem" onclick="toggleEditMode()">✅ Done Editing</button>
+</div>
+
+<!-- User Menu Modal -->
+<div class="modal-overlay" id="userMenuModal">
+  <div class="modal" style="max-width:360px">
+    <button class="modal-close" onclick="closeModal('userMenuModal')">✕</button>
+    <div class="modal-title">👤 My Account</div>
+    <div class="modal-sub" id="user-menu-name" style="color:var(--accent);font-size:1rem;font-weight:600"></div>
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:1.25rem">
+      <div style="display:flex;justify-content:space-between;margin-bottom:.5rem">
+        <span style="font-size:.78rem;color:var(--muted)">Membership Tier</span>
+        <span id="user-menu-tier" style="font-size:.78rem;font-weight:700;color:var(--accent)"></span>
+      </div>
+      <div style="display:flex;justify-content:space-between">
+        <span style="font-size:.78rem;color:var(--muted)">Status</span>
+        <span style="font-size:.78rem;font-weight:700;color:var(--success)">Active</span>
+      </div>
+    </div>
+    <button class="btn btn-primary" style="width:100%;padding:.7rem;margin-bottom:.6rem" onclick="closeModal('userMenuModal');openModal('membershipModal')">⚡ Upgrade Membership</button>
+    <button class="btn btn-ghost" style="width:100%;padding:.7rem;color:var(--danger);border-color:rgba(239,68,68,.3)" onclick="userLogout()">Sign Out</button>
+  </div>
 </div>
 </body>
 </html>
